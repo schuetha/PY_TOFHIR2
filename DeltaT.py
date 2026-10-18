@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-petrDeltaT.py - Petr Gorbounov's test-beam dT analysis (SND@LHC Coll. meeting 24.09.2026), applied to simulation
+DeltaT.py - test-beam dT analysis (SND@LHC Coll.), applied to simulation
 
-His recipe (slides 3-5, 7, 9-10, 13), and what it becomes here:
+recipe , and what it becomes here:
   TOFHIR per hit:  T = time of the T1 crossing (TDC)          -> t = T1 crossing of the simulated waveform
                    E = QDC "energy" (charge ~ number of photons) -> E = Npe x --qdcPerPe  (optionally saturated)
   local time:      T - T0 (external trigger)                    -> t - t_muon (Geant4 time 0; + optional T0 jitter)
@@ -16,15 +16,12 @@ His recipe (slides 3-5, 7, 9-10, 13), and what it becomes here:
   colours as on his slides: blue = dT before the walk correction, red = after ("dtcorr"), with its Gaussian fit
 
 Output (-o folder): one page per SiPM pair laid out like his slides (E spectra with the E-band, dt vs E with the
-walk fit, dT raw + corrected with the Gaussian fit box), a summary page, petr_dT.csv.
-
-Not in the simulation (so sigma is a lower limit): electronic noise, dark counts, TDC binning, channel calibration.
---tdcSigma adds a Gaussian time smearing per hit [ps], --t0Sigma a common T0 jitter [ps] (cancels in dT).
+walk fit, dT raw + corrected with the Gaussian fit box), a summary page, dT.csv.
 
 Usage
-  python3 petrDeltaT.py SiPMModel/createWaveforms/waveforms_SND_25um_HPK_T1_muon_beam_100000events_withDLED_0.58ns.root --thrPE 50 -o no_Ecuts_with50pE_threshold                                  # all events, no cuts
-  python3 petrDeltaT.py SiPMModel/createWaveforms/waveforms_SND_25um_HPK_T1_muon_beam_100000events_withDLED_0.58ns.root --thrPE 50 --eBandPct 40 90 --dEfrac 0.07  -o Petr_like_cuts_with50pE_threshold   # Petr-like cuts
-  python3 petrDeltaT.py waveforms.root --thrDAC 5 --tbRun run0305_e.root ...        # T1 threshold as ith1
+  python3 DeltaT.py SiPMModel/createWaveforms/waveforms_SND_25um_HPK_T1_muon_beam_100000events_withDLED_0.58ns.root --thrPE 50 -o no_Ecuts_with50pE_threshold                                  # all events, no cuts
+  python3 DeltaT.py SiPMModel/createWaveforms/waveforms_SND_25um_HPK_T1_muon_beam_100000events_withDLED_0.58ns.root --thrPE 50 --eBandPct 40 90 --dEfrac 0.07  -o E_cuts_with50pE_threshold   # E cuts
+  python3 DeltaT.py waveforms.root --thrDAC 5 --tbRun run0305_e.root ...        # T1 threshold as ith1
 """
 
 import argparse
@@ -105,12 +102,12 @@ def main():
     ap.add_argument("--dEfrac", type=float, default=None, help="|E1-E2| < dEfrac x (E1+E2)/2")
     ap.add_argument("--tdcSigma", type=float, default=0., help="Gaussian smearing per hit [ps] (TDC/electronics)")
     ap.add_argument("--t0Sigma", type=float, default=0., help="Gaussian T0 jitter per event [ps]")
-    ap.add_argument("--dtRange", type=float, default=2., help="dT histogram range +-[ns] (Petr: 2)")
+    ap.add_argument("--dtRange", type=float, default=2., help="dT histogram range +-[ns] (: 2)")
     ap.add_argument("--dtBin", type=float, default=0.02, help="dT bin width [ns]")
     ap.add_argument("--walkFunc", choices=["log2", "power"], default="log2",
                     help="time-walk curve: log2 = a + b lnE + c lnE^2 (default), power = a + b/E^c")
     ap.add_argument("--seed", type=int, default=1)
-    ap.add_argument("-o", "--out", default="petr_dT")
+    ap.add_argument("-o", "--out", default="dT")
     tbunits.add_args(ap)
     a = ap.parse_args()
     import uproot
@@ -192,7 +189,7 @@ def main():
     cutTxt = ", ".join(cuts) or "no cuts"
 
     rows = []
-    pdf = PdfPages(os.path.join(a.out, "petr_dT.pdf"))
+    pdf = PdfPages(os.path.join(a.out, "dT.pdf"))
     plt.rcParams.update({"font.size": 8, "axes.edgecolor": MUTED, "axes.labelcolor": INK,
                          "xtick.color": INK, "ytick.color": INK, "axes.grid": True, "grid.color": "#e1e0d9",
                          "grid.linestyle": ":"})
@@ -214,7 +211,7 @@ def main():
                          sigmaPairErr_ps=1e3 * fc["sigmaErr"], sigmaSiPM_ps=1e3 * fc["sigma"] / np.sqrt(2),
                          meanCorr_ns=fc["mean"], chi2=fc["chi2"], ndf=fc["ndf"]))
 
-        # ---------- page like Petr's slides
+        
         fig = plt.figure(figsize=(13, 6.4))
         gs = fig.add_gridspec(2, 4, height_ratios=[1, 1.15], hspace=0.38, wspace=0.28)
         for k, c in enumerate((p, q)):
@@ -260,12 +257,12 @@ def main():
         #                      f"{int(sel.sum())} events; before walk correction σ(pair) = {1e3 * fr['sigma']:.0f} ps",
                 #  fontsize=9, color=MUTED, va="top")
         fig.suptitle(f"Adjacent SiPMs {p} and {q} - simulation", fontsize=11)
-        fig.savefig(os.path.join(a.out, f"petr_dT_{p}-{q}.png"), dpi=1200)
+        fig.savefig(os.path.join(a.out, f"dT_{p}-{q}.png"), dpi=1200)
         pdf.savefig(fig); plt.close(fig)
 
     import pandas as pd
     df = pd.DataFrame(rows)
-    df.to_csv(os.path.join(a.out, "petr_dT.csv"), index=False, float_format="%.4g")
+    df.to_csv(os.path.join(a.out, "dT.csv"), index=False, float_format="%.4g")
     fig, ax = plt.subplots(figsize=(8, 4))
     x = np.arange(len(df))
     ax.bar(x - 0.2, df.sigmaPairRaw_ps / np.sqrt(2), 0.38, color=BLUE, label="before walk correction")
@@ -274,11 +271,11 @@ def main():
     ax.set_title(f"{cf['name']}, T1 {thrLabel}, {cutTxt}", fontsize=9); ax.legend(fontsize=8)
     for i, v in enumerate(df.sigmaSiPM_ps):
         ax.text(i + 0.2, v, f"{v:.0f}", ha="center", va="bottom", fontsize=8)
-    fig.tight_layout(); fig.savefig(os.path.join(a.out, "petr_dT_summary.png"), dpi=1200); pdf.savefig(fig)
+    fig.tight_layout(); fig.savefig(os.path.join(a.out, "dT_summary.png"), dpi=1200); pdf.savefig(fig)
     pdf.close()
     print(df[["pair", "nEvents", "sigmaPairRaw_ps", "sigmaPair_ps", "sigmaSiPM_ps", "chi2", "ndf"]]
           .round(1).to_string(index=False))
-    print(f">>> wrote {a.out}/petr_dT.pdf, petr_dT_<pair>.png, petr_dT_summary.png, petr_dT.csv")
+    print(f">>> wrote {a.out}/dT.pdf, dT_<pair>.png, dT_summary.png, dT.csv")
 
 
 if __name__ == "__main__":
